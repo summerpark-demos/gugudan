@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 보안 장치(CSP): 이 페이지는 자기 자신의 파일만 쓰고, 외부 접속·외부 불러오기·양식 전송은 브라우저가 막습니다 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'none'; media-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>구구단</title>
+<meta name="theme-color" content="#43A047">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="구구단">
+<style>
+  :root { --fs: 30px; --bg: #F1F8E9; --green: #2E7D32; --line: #7CB342; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: #1f2a1a;
+    font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: var(--fs); line-height: 1.4;
+    min-height: 100vh; min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation; overscroll-behavior: none;
+  }
+  button { font-family: inherit; touch-action: manipulation; cursor: pointer; }
+  #app { max-width: 600px; margin: 0 auto; }
+
+  /* ---------- 첫 화면 ---------- */
+  .home { padding: 14px 16px 30px; }
+  .home h1 { text-align: center; font-size: 1.5em; margin: 6px 0 4px; color: var(--green); }
+  .home .sub { text-align: center; font-size: .62em; color: #556b3f; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dan {
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+    min-height: 112px; padding: 8px 10px; border-radius: 24px;
+    border: 4px solid var(--line); background: #fff; color: #1f2a1a;
+    font-size: 1.15em; font-weight: 800; box-shadow: 0 4px 0 #b5d58a;
+  }
+  .dan:active { transform: translateY(3px); box-shadow: 0 1px 0 #b5d58a; }
+  .dan svg { width: 68px; height: 92px; flex: none; }
+  .dan.wide { grid-column: 1 / -1; border-color: #F9A825; box-shadow: 0 4px 0 #f1cf7a; background: #FFFDE7; }
+  .dan.wide:active { box-shadow: 0 1px 0 #f1cf7a; }
+  .dan small { display: block; font-size: .5em; font-weight: 700; color: #7a6a2a; }
+  .dan.off { opacity: .55; box-shadow: none; }
+  .tools { display: flex; justify-content: center; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  .small-btn {
+    font-size: .55em; padding: 8px 16px; border-radius: 14px; border: 2px solid #6b8f3f;
+    background: #fff; color: #3d5a1f; font-weight: 700; min-height: 48px;
+  }
+
+  /* ---------- 게임 화면 (안 1) : [상단바] [문제 줄] [정답칸 + 화분 줄] [선택 버튼] [메시지] ---------- */
+  .game {
+    display: flex; flex-direction: column; gap: 12px; gap: 1.4dvh;
+    min-height: 100vh; min-height: 100dvh;
+    padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .bar .title { flex: 1; min-width: 0; text-align: center; font-weight: 800; font-size: 34px; font-size: min(11vw, 60px); line-height: 1.1; color: var(--green); white-space: nowrap; }
+  .barbtn {
+    flex: none; font-size: 20px; font-size: min(5.4vw, 30px); font-weight: 800; line-height: 1.1;
+    padding: 0 12px; padding: 0 min(3.2vw, 20px); min-height: 54px; min-height: min(14vw, 76px);
+    border-radius: 18px; border: 3px solid #6b8f3f; background: #fff; color: #3d5a1f;
+  }
+  .bounce { animation: bounce .7s ease; }
+  @keyframes bounce { 0% { transform: scale(1); } 35% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+  /* 문제 줄: 글자 사이 간격은 공백 대신 좁은 gap 으로 (= ? 까지 한 줄에 다 들어오게) */
+  .q { display: flex; justify-content: center; }
+  .eq {
+    display: inline-flex; align-items: center; gap: .15em; white-space: nowrap; font-weight: 800; line-height: 1.05;
+    font-size: 90px; font-size: min(25vw, 11.6vh, 150px); font-size: min(25vw, 11.6dvh, 150px);
+  }
+
+  /* 정답칸 줄: 왼쪽 정답칸 + 오른쪽 화분 (정답칸 30, 화분 1.5배) */
+  .row1 { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: -3dvh; }
+  .slots {
+    display: flex; gap: 12px; flex: none;
+    width: 232px; width: calc(min(30vw, 13.9vh, 180px) * 2 + 12px); width: calc(min(30vw, 13.9dvh, 180px) * 2 + 12px);
+  }
+  .slot {
+    flex: none; width: 110px; width: min(30vw, 13.9vh, 180px); width: min(30vw, 13.9dvh, 180px);
+    height: 137px; height: calc(min(30vw, 13.9vh, 180px) * 1.25); height: calc(min(30vw, 13.9dvh, 180px) * 1.25);
+    border: 5px dashed #7CB342; border-radius: 20px; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 85px; font-size: calc(min(30vw, 13.9vh, 180px) * .78); font-size: calc(min(30vw, 13.9dvh, 180px) * .78);
+    font-weight: 800; color: #2E7D32; line-height: 1;
+  }
+  .slot.filled { border-style: solid; border-color: #2E7D32; }
+  .plant {
+    flex: 1; min-width: 0; display: flex; justify-content: center; align-items: flex-end;
+    height: 206px; height: calc(min(30vw, 13.9vh, 180px) * 1.65); height: calc(min(30vw, 13.9dvh, 180px) * 1.65);
+  }
+  .plant svg { height: 100%; width: auto; overflow: visible; transform-origin: 50% 100%; }
+
+  /* 선택 버튼: 남는 높이를 모두 차지 (빈 공간 대신 버튼이 커짐) */
+  .choices { flex: 1 1 0; min-height: 190px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; }
+  .ch {
+    position: relative; min-height: 0; border-radius: 26px; border: 5px solid #558B2F; background: #fff; color: #1f2a1a;
+    font-size: 80px; font-size: min(26vw, 13vh, 120px); font-size: min(26vw, 13dvh, 120px); font-weight: 800; line-height: 1;
+    box-shadow: 0 5px 0 #b5d58a; padding: 0;
+  }
+  .ch:active { transform: translateY(3px); box-shadow: 0 2px 0 #b5d58a; }
+  .ch.ok { background: #E8F5E9; border-color: #2E7D32; box-shadow: none; }
+  .ch.ok::after {
+    content: ""; position: absolute; inset: 7% 10%; border: 9px solid #E53935; border-radius: 50%;
+    transform: rotate(-6deg);
+  }
+  .ch.no { background: #ECEFF1; color: #B0BEC5; border-color: #CFD8DC; box-shadow: none; animation: shake .45s; }
+  .ch.no::after {
+    content: "땡"; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    font-size: 30px; font-size: min(7vw, 4.2dvh, 34px); font-weight: 800; color: #fff; background: #D32F2F;
+    padding: 2px 16px; border-radius: 999px;
+  }
+  .ch:disabled { cursor: default; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-9px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
+  .msg {
+    text-align: center; font-weight: 800; color: #3d5a1f; white-space: nowrap; min-height: 1.5em; line-height: 1.5;
+    font-size: 27px; font-size: min(8vw, 4.4vh, 48px); font-size: min(8vw, 4.4dvh, 48px);
+  }
+  .msg.bad { color: #8a5a00; }
+
+  /* ---------- 완성 화면 ---------- */
+  .done { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); min-height: 100vh; min-height: 100dvh; }
+  .done h2 { margin: 6px 0 0; font-size: 1.3em; color: var(--green); text-align: center; }
+  .done .big { flex: 1 1 0; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: flex-end; }
+  .done .big svg { height: 100%; max-height: 52dvh; width: auto; max-width: 100%; transform-origin: 50% 100%; }
+  .done .cap { font-size: .8em; font-weight: 800; text-align: center; word-break: keep-all; }
+  .main-btn {
+    font-size: 1em; font-weight: 800; color: #fff; background: #2E7D32; border: none; border-radius: 24px;
+    width: 100%; min-height: 84px; box-shadow: 0 5px 0 #1b5e20;
+  }
+  .main-btn.second { background: #fff; color: #2E7D32; border: 4px solid #2E7D32; box-shadow: 0 5px 0 #a5d6a7; }
+  .main-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #1b5e20; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =====================================================
+   구구단 (PoC)
+   - 첫 화면: 2~9단 + 자주 틀린 것
+   - 한 문제씩, 숫자 4개 중 순서대로 눌러 답 만들기
+   - 맞힐 때마다 화분 식물이 자람 (틀려도 줄지 않음)
+   ===================================================== */
+
+// ---------- 설정 값 (필요하면 여기 숫자만 바꾸세요) ----------
+var RESET_AFTER_MINUTES = 3;  // 앱을 두고 이 시간 넘게 지나 돌아오면 첫 화면으로
+var DELAY = 1700;             // 맞힌 뒤 다음 문제로 넘어가기까지 (밀리초)
+var HARD_MAX = 9;             // '자주 틀린 것'에 담는 문제 수
+
+// ---------- 저장 (이 앱 전용 이름표 'gugu:' 사용. 글씨 크기만 추억 퀴즈와 공유) ----------
+var K_WRONG = "gugu:wrong", K_DONE = "gugu:done", K_VOICE = "gugu:voice";
+function lsGet(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function jGet(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function jSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+// ---------- 글씨 크기 ----------
+var SIZES = [26, 30, 34, 38, 44];
+function getSizeIdx() { var i = parseInt(lsGet("sizeIdx", "1"), 10); return (i >= 0 && i < SIZES.length) ? i : 1; }
+function applySize() { document.documentElement.style.setProperty("--fs", SIZES[getSizeIdx()] + "px"); }
+function changeSize(d) { var i = Math.max(0, Math.min(SIZES.length - 1, getSizeIdx() + d)); lsSet("sizeIdx", String(i)); applySize(); }
+
+// ---------- 읽어주기 ----------
+var voiceOn = lsGet(K_VOICE, "1") === "1";
+function speak(text, queue) {
+  try {
+    if (!voiceOn || !("speechSynthesis" in window)) return;
+    if (!queue) window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "ko-KR"; u.rate = 0.85;
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function stopSpeak() { try { window.speechSynthesis.cancel(); } catch (e) {} }
+
+// 숫자 읽기 (이 일은 이, 이 이 사 ...)
+var D1 = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+var JOSA = ["", "은", "는", "은", "는", "는", "은", "은", "은", "는"];
+function sino(n) { if (n < 10) return D1[n]; var t = Math.floor(n / 10), o = n % 10; return (t === 1 ? "" : D1[t]) + "십" + D1[o]; }
+function chant(a, b) { return D1[a] + " " + D1[b] + (b === 1 ? "은" : "") + " " + sino(a * b); }
+function askText(a, b) { return D1[a] + " 곱하기 " + D1[b] + JOSA[b] + "?"; }
+
+function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+/* =====================================================
+   화분 식물 그림 (SVG) - 0~9 단계
+   ===================================================== */
+function f(n) { return Math.round(n * 10) / 10; }
+var C = { g: "#4CAF50", gd: "#2E7D32", gl: "#81C784" };
+function line(x1, y1, x2, y2, w, c) { return '<line x1="' + f(x1) + '" y1="' + f(y1) + '" x2="' + f(x2) + '" y2="' + f(y2) + '" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round"/>'; }
+function circ(x, y, r, c) { return '<circle cx="' + f(x) + '" cy="' + f(y) + '" r="' + f(r) + '" fill="' + c + '"/>'; }
+function leaf(x, y, len, ang, col) {
+  var r = ang * Math.PI / 180, cx = x + Math.cos(r) * len / 2, cy = y + Math.sin(r) * len / 2;
+  return '<ellipse cx="' + f(cx) + '" cy="' + f(cy) + '" rx="' + f(len / 2) + '" ry="' + f(len * 0.26) + '" fill="' + (col || C.g) + '" transform="rotate(' + ang + ' ' + f(cx) + ' ' + f(cy) + ')"/>';
+}
+function pot() {
+  return '<ellipse cx="100" cy="193" rx="46" ry="5" fill="rgba(0,0,0,.10)"/>' +
+    '<path d="M62 154 L69 187 Q70 192 76 192 L124 192 Q130 192 131 187 L138 154 Z" fill="#C8643C"/>' +
+    '<rect x="55" y="143" width="90" height="15" rx="6" fill="#D9774A"/>' +
+    '<ellipse cx="100" cy="144" rx="41" ry="4.5" fill="#6B4423"/>';
+}
+function bloom(cx, cy, k, petal, center) {
+  var o = '<g transform="translate(' + f(cx) + ' ' + f(cy) + ') scale(' + f(k) + ')">';
+  for (var i = 0; i < 8; i++) o += '<ellipse cx="0" cy="-19" rx="9" ry="14" fill="' + petal + '" transform="rotate(' + (i * 45) + ')"/>';
+  return o + '<circle r="11" fill="' + center + '"/></g>';
+}
+
+var PLANT = {};
+
+// 2단: 꽃
+PLANT.flower = function (s) {
+  if (s < 1) return "";
+  var h = 12 + (s - 1) * 11, top = 144 - h, o = line(100, 144, 100, top, 6, C.gd);
+  if (s >= 2) o += leaf(100, 144 - h * 0.3, 22 + s * 2, -35);
+  if (s >= 3) o += leaf(100, 144 - h * 0.45, 22 + s * 2, -145);
+  if (s >= 5) o += leaf(100, 144 - h * 0.65, 18 + s * 2, -30);
+  if (s <= 5) o += leaf(100, top, 12 + s * 2, -65) + leaf(100, top, 12 + s * 2, -115);
+  if (s === 6) o += circ(100, top, 5, C.gd);
+  if (s === 7) o += '<ellipse cx="100" cy="' + f(top - 4) + '" rx="9" ry="13" fill="#F8BBD0"/><path d="M91 ' + f(top + 2) + ' Q100 ' + f(top - 6) + ' 109 ' + f(top + 2) + ' Z" fill="' + C.gd + '"/>';
+  if (s >= 8) o += bloom(100, top, s === 8 ? 0.6 : 1, "#F48FB1", "#FFD54F");
+  return o;
+};
+
+// 3단: 오이 (선글라스)
+PLANT.cucumber = function (s) {
+  if (s < 1) return "";
+  var bh = 14 + (s - 1) * 10.5, top = 144 - bh, o = "";
+  if (s >= 2) o += leaf(84, 144 - 14, 28 + s * 1.5, -165);
+  if (s >= 3) o += leaf(116, 144 - 24, 28 + s * 1.5, -15);
+  o += '<path d="M83 144 V' + f(top + 17) + ' A17 17 0 0 1 117 ' + f(top + 17) + ' V144 Z" fill="#43A047"/>';
+  o += line(91, top + 17, 91, 138, 3, "#66BB6A") + line(110, top + 19, 110, 136, 3, "#2E7D32");
+  if (bh > 40) o += circ(96, top + bh * 0.62, 1.8, "#2E7D32") + circ(105, top + bh * 0.75, 1.8, "#2E7D32") + circ(94, top + bh * 0.85, 1.8, "#2E7D32");
+  if (s < 6) o += circ(100, top - 3, 4.5, "#FFEB3B");
+  else o += '<rect x="97.5" y="' + f(top - 4) + '" width="5" height="6" rx="2" fill="#6D4C41"/>';
+  if (s >= 9) {
+    var gy = top + bh * 0.2;
+    o += '<rect x="84" y="' + f(gy) + '" width="15.5" height="12" rx="5" fill="#212121"/><rect x="100.5" y="' + f(gy) + '" width="15.5" height="12" rx="5" fill="#212121"/>';
+    o += line(99, gy + 3.5, 101, gy + 3.5, 2.5, "#212121") + line(88, gy + 3.5, 94, gy + 3.5, 2, "#9E9E9E") + line(105, gy + 3.5, 111, gy + 3.5, 2, "#9E9E9E");
+    o += '<path d="M89 ' + f(gy + 24) + ' Q100 ' + f(gy + 36) + ' 111 ' + f(gy + 24) + '" stroke="#1B5E20" stroke-width="3.5" fill="none" stroke-linecap="round"/>';
+    o += circ(87, gy + 22, 4, "#A5D6A7") + circ(113, gy + 22, 4, "#A5D6A7");
+  }
+  return o;
+};
+
+// 4단: 파
+PLANT.onion = function (s) {
+  if (s < 1) return "";
+  var B = [[100, 0, 1], [92, -0.10, 0.82], [108, 0.10, 0.9], [85, -0.2, 0.62], [115, 0.2, 0.68], [96, -0.04, 0.74], [105, 0.06, 0.78]];
+  var n = Math.min(7, Math.ceil(s * 0.8)), H0 = 12 + s * 10.5, o = "";
+  for (var i = n - 1; i >= 0; i--) {
+    var b = B[i], H = H0 * b[2];
+    o += line(b[0], 144, b[0] + b[1] * H, 144 - H, 9, "#43A047");
+    o += line(b[0], 144, b[0] + b[1] * H * 0.3, 144 - H * 0.3, 9, "#F1F8E9");
+  }
+  return o;
+};
+
+// 5단: 토마토
+PLANT.tomato = function (s) {
+  if (s < 1) return "";
+  var h = 12 + s * 9, top = 144 - h, o = line(100, 144, 100, top, 5, C.gd);
+  var Ls = [[0.25, -30, 24], [0.38, -150, 24], [0.52, -35, 26], [0.62, -145, 26], [0.78, -40, 22], [0.88, -140, 20]];
+  for (var i = 0; i < Ls.length; i++) if (s >= i + 1) o += leaf(100, 144 - h * Ls[i][0], Ls[i][2], Ls[i][1]);
+  var T = [[-26, 0.50, 4], [26, 0.66, 6], [-16, 0.84, 8]];
+  var r = Math.min(15, 6 + (s - 3) * 1.7), col = s <= 6 ? "#8BC34A" : (s === 7 ? "#FF9800" : "#E53935");
+  for (var j = 0; j < T.length; j++) {
+    if (s < T[j][2]) continue;
+    var ax = 100, ay = 144 - h * T[j][1] - 6, cx = 100 + T[j][0], cy = ay + r + 4;
+    o += line(ax, ay, cx, cy - r, 3, C.gd) + circ(cx, cy, r, col) + circ(cx - r * 0.35, cy - r * 0.3, r * 0.22, "rgba(255,255,255,.45)") + circ(cx, cy - r + 1, 3.2, C.gd);
+  }
+  return o;
+};
+
+// 6단: 해바라기 (다 자라면 선풍기처럼 빙글빙글)
+PLANT.sunflower = function (s) {
+  if (s < 1) return "";
+  var h = 10 + s * 9.5, top = 144 - h, o = line(100, 144, 100, top, 7, C.gd);
+  if (s >= 2) o += leaf(100, 144 - h * 0.28, 30 + s * 1.5, -25);
+  if (s >= 3) o += leaf(100, 144 - h * 0.42, 30 + s * 1.5, -155);
+  if (s === 4) o += circ(100, top, 6, C.g);
+  if (s >= 5) {
+    var k = 0.34 + (s - 5) * 0.115, spin = s >= 9;
+    o += '<g transform="translate(100 ' + f(top) + ') scale(' + f(k) + ')"><g>';
+    if (spin) o += '<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.2s" repeatCount="indefinite"/>';
+    for (var i = 0; i < 14; i++) o += '<ellipse cx="0" cy="-31" rx="8" ry="15" fill="#FFC107" transform="rotate(' + f(i * 360 / 14) + ')"/>';
+    o += '<circle r="22" fill="#6D4C41"/><circle r="13" fill="#5D4037"/><circle r="5" fill="#4E342E"/></g></g>';
+    if (spin) {
+      var wx = 100 + 44, wy = top;
+      o += '<g fill="none" stroke="#81D4FA" stroke-width="4" stroke-linecap="round"><animate attributeName="opacity" values="1;.35;1" dur="1.2s" repeatCount="indefinite"/>' +
+        '<path d="M' + wx + ' ' + f(wy - 14) + ' q 14 -8 28 0"/><path d="M' + (wx + 2) + ' ' + f(wy) + ' q 14 -8 28 0"/><path d="M' + wx + ' ' + f(wy + 14) + ' q 14 -8 28 0"/></g>';
+    }
+  }
+  return o;
+};
+
+// 7단: 고추
+PLANT.pepper = function (s) {
+  if (s < 1) return "";
+  var h = 12 + s * 9, top = 144 - h, o = line(100, 144, 100, top, 5, C.gd);
+  var Ls = [[0.25, -30, 22], [0.4, -150, 22], [0.55, -35, 24], [0.68, -145, 24], [0.82, -40, 20], [0.92, -140, 18]];
+  for (var i = 0; i < Ls.length; i++) if (s >= i + 1) o += leaf(100, 144 - h * Ls[i][0], Ls[i][2], Ls[i][1]);
+  var P = [[-20, 0.62, 4], [22, 0.74, 5], [-8, 0.88, 6]];
+  var ry = Math.min(17, 6 + (s - 3) * 2), rx = ry * 0.36, col = s <= 6 ? "#66BB6A" : (s === 7 ? "#FF8F00" : "#D32F2F");
+  for (var j = 0; j < P.length; j++) {
+    if (s < P[j][2]) continue;
+    var ax = 100, ay = 144 - h * P[j][1], cx = 100 + P[j][0], cy = ay + ry + 6, rot = P[j][0] < 0 ? 14 : -14;
+    o += line(ax, ay, cx, cy - ry, 3, C.gd);
+    o += '<ellipse cx="' + f(cx) + '" cy="' + f(cy) + '" rx="' + f(rx) + '" ry="' + f(ry) + '" fill="' + col + '" transform="rotate(' + rot + ' ' + f(cx) + ' ' + f(cy - ry) + ')"/>';
+    o += circ(cx, cy - ry + 1, 3.4, C.gd);
+  }
+  return o;
+};
+
+// 8단: 호박
+PLANT.pumpkin = function (s) {
+  if (s < 1) return "";
+  var h = 10 + s * 7, top = 144 - h, o = '<path d="M100 144 Q92 ' + f(144 - h * 0.5) + ' 104 ' + f(top) + '" stroke="' + C.gd + '" stroke-width="5" fill="none" stroke-linecap="round"/>';
+  o += leaf(98, 144 - h * 0.45, 30 + s * 2.4, -160) + leaf(103, 144 - h * 0.72, 30 + s * 2.4, -20);
+  if (s <= 3) o += leaf(104, top, 12 + s * 3, -80);
+  if (s >= 3) {
+    var r = 8 + (s - 2) * 4.4, cy = 144 - r * 0.82;
+    o += '<ellipse cx="' + f(100 - r * 0.52) + '" cy="' + f(cy) + '" rx="' + f(r * 0.5) + '" ry="' + f(r * 0.82) + '" fill="#F57C00"/>';
+    o += '<ellipse cx="' + f(100 + r * 0.52) + '" cy="' + f(cy) + '" rx="' + f(r * 0.5) + '" ry="' + f(r * 0.82) + '" fill="#F57C00"/>';
+    o += '<ellipse cx="100" cy="' + f(cy) + '" rx="' + f(r * 0.56) + '" ry="' + f(r * 0.88) + '" fill="#FFA726"/>';
+    o += '<rect x="97" y="' + f(cy - r * 0.88 - 5) + '" width="6" height="9" rx="2" fill="#6D4C41"/>';
+  }
+  return o;
+};
+
+// 나무 (사과나무 / 붕어빵 나무 공통)
+function tree(s, fruitFn, F) {
+  if (s < 1) return "";
+  var th = 8 + s * 8, r = 10 + s * 3.3, cy = 144 - th - r * 0.35, o = "";
+  o += '<path d="M94 144 L96.5 ' + f(144 - th) + ' L103.5 ' + f(144 - th) + ' L106 144 Z" fill="#8D6E63"/>';
+  o += circ(100 - r * 0.62, cy + r * 0.28, r * 0.72, C.gd) + circ(100 + r * 0.62, cy + r * 0.28, r * 0.72, C.gd);
+  o += circ(100, cy, r, C.g) + circ(100 - r * 0.2, cy - r * 0.25, r * 0.55, C.gl);
+  var n = Math.max(0, Math.min(F.length, s - 3));
+  for (var i = 0; i < n; i++) o += fruitFn(100 + F[i][0] * r, cy + F[i][1] * r, F[i][2]);
+  return o;
+}
+var APPLE_POS = [[-0.45, 0.20, -12], [0.35, -0.40, 10], [0.55, 0.35, 14], [-0.15, 0.50, -8], [0.05, -0.05, 6], [-0.6, -0.30, -14]];
+var FISH_POS = [[-0.55, -0.30, -14], [0.15, -0.55, 8], [0.62, -0.20, -6], [-0.55, 0.28, 10], [0.10, 0.12, -10], [0.60, 0.40, 12]];
+function apple(x, y) { return circ(x, y, 7, "#E53935") + circ(x - 2.5, y - 2.5, 2, "rgba(255,255,255,.55)") + line(x, y - 6, x + 1.5, y - 10, 2, "#5D4037"); }
+function fish(x, y, ang) {
+  return '<g transform="translate(' + f(x) + ' ' + f(y) + ') rotate(' + ang + ') scale(.66)">' +
+    '<path d="M-14 0 L-25 -8 L-25 8 Z" fill="#C9822E"/><ellipse cx="0" cy="0" rx="16" ry="9.5" fill="#E3A04A"/>' +
+    '<path d="M-6 -7 Q-3 0 -6 7 M0 -8 Q3 0 0 8 M6 -7 Q9 0 6 7" stroke="#B8721F" stroke-width="1.6" fill="none"/>' +
+    '<circle cx="10" cy="-2" r="2" fill="#4E2A0C"/><path d="M-3 -9 L2 -15 L7 -9 Z" fill="#C9822E"/></g>';
+}
+PLANT.apple = function (s) { return tree(s, apple, APPLE_POS); };
+PLANT.bungeo = function (s) { return tree(s, fish, FISH_POS); };
+
+function plantSVG(kind, s, mini) {
+  // mini === "tall": 게임 화면(좁고 길게), mini === true: 첫 화면 작은 그림, 그 외: 전체
+  return '<svg class="plant" viewBox="' + (mini === "tall" ? "45 0 110 200" : (mini ? "28 6 144 194" : "0 0 200 200")) + '" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + pot() + (PLANT[kind] ? PLANT[kind](s) : "") + '</svg>';
+}
+
+// 단 → 식물 / 완성했을 때 한마디
+var KIND = { 2: "flower", 3: "cucumber", 4: "onion", 5: "tomato", 6: "sunflower", 7: "pepper", 8: "pumpkin", 9: "bungeo", hard: "apple" };
+var CAPTION = {
+  flower: "꽃이 활짝 피었어요! 🌸",
+  cucumber: "오이가 멋진 선글라스를 썼어요! 😎",
+  onion: "파가 쑥쑥 자랐어요! 🌱",
+  tomato: "토마토가 빨갛게 익었어요! 🍅",
+  sunflower: "해바라기가 선풍기가 됐어요! 시원하다~ 💨",
+  pepper: "고추가 빨갛게 익었어요! 🌶️",
+  pumpkin: "커다란 호박이 열렸어요!",
+  bungeo: "붕어빵이 주렁주렁! 따끈따끈해요 😋",
+  apple: "사과가 주렁주렁 열렸어요! 🍎"
+};
+
+/* =====================================================
+   문제 만들기
+   ===================================================== */
+// 보기 4개: 정답 숫자(1~2개) + 헷갈리기 쉬운 숫자
+function buildChoices(a, b) {
+  var ans = a * b, s = String(ans), need = 4 - s.length;
+  var correct = s.split("").map(Number), weights = {};
+  function addNum(n, w) {
+    if (n < 1 || n > 81) return;
+    String(n).split("").forEach(function (ch) { var c = Number(ch); if (correct.indexOf(c) < 0) weights[c] = (weights[c] || 0) + w; });
+  }
+  addNum(a * (b - 1), 2); addNum(a * (b + 1), 2); addNum((a - 1) * b, 2); addNum((a + 1) * b, 2);
+  addNum(ans - 1, 3); addNum(ans + 1, 3); addNum(ans - a, 1); addNum(ans + a, 1);
+  var picks = [];
+  while (picks.length < need) {
+    var keys = Object.keys(weights).map(Number).filter(function (k) { return picks.indexOf(k) < 0; });
+    var c;
+    if (keys.length) {
+      var tot = 0; keys.forEach(function (k) { tot += weights[k]; });
+      var r = Math.random() * tot; c = keys[keys.length - 1];
+      for (var i = 0; i < keys.length; i++) { r -= weights[keys[i]]; if (r <= 0) { c = keys[i]; break; } }
+    } else {
+      do { c = Math.floor(Math.random() * 10); } while (correct.indexOf(c) >= 0 || picks.indexOf(c) >= 0);
+    }
+    picks.push(c);
+  }
+  return shuffle(correct.concat(picks));
+}
+
+function hardList() {
+  var w = jGet(K_WRONG, {}), arr = [];
+  Object.keys(w).forEach(function (k) { if (w[k] > 0) arr.push([k, w[k]]); });
+  arr.sort(function (x, y) { return y[1] - x[1] || (x[0] < y[0] ? -1 : 1); });
+  return arr.slice(0, HARD_MAX).map(function (e) { var p = e[0].split("x"); return [Number(p[0]), Number(p[1])]; });
+}
+function bumpWrong(a, b, delta) {
+  var w = jGet(K_WRONG, {}), k = a + "x" + b;
+  w[k] = Math.max(0, (w[k] || 0) + delta);
+  if (w[k] === 0) delete w[k];
+  jSet(K_WRONG, w);
+}
+
+/* =====================================================
+   화면
+   ===================================================== */
+var app = document.getElementById("app");
+var G = null;           // 지금 하고 있는 게임
+var hiddenAt = null;
+
+function clearTimer() { if (G && G.timer) { clearTimeout(G.timer); G.timer = null; } }
+
+function showHome() {
+  clearTimer(); stopSpeak(); G = null;
+  var done = jGet(K_DONE, {}), hn = hardList().length, html = "";
+  for (var d = 2; d <= 9; d++) {
+    html += '<button class="dan" data-dan="' + d + '">' + plantSVG(KIND[d], done[d] ? 9 : 0, true) + '<span>' + d + '단</span></button>';
+  }
+  html += '<button class="dan wide' + (hn ? '' : ' off') + '" data-dan="hard">' + plantSVG("apple", done.hard ? 9 : 0, true) +
+    '<span>자주 틀린 것' + (hn ? '<small>' + hn + '문제</small>' : '<small>아직 없어요</small>') + '</span></button>';
+  app.innerHTML =
+    '<div class="home"><h1>구구단</h1><div class="sub">풀고 싶은 단을 눌러 보세요</div>' +
+    '<div class="grid">' + html + '</div>' +
+    '<div class="tools"><button class="small-btn" id="smaller">글씨 작게</button><button class="small-btn" id="bigger">글씨 크게</button>' +
+    '<button class="small-btn" id="voiceH">' + (voiceOn ? "소리 켜짐" : "소리 꺼짐") + '</button></div></div>';
+  var btns = app.querySelectorAll(".dan");
+  for (var i = 0; i < btns.length; i++) btns[i].onclick = function () {
+    var v = this.getAttribute("data-dan");
+    startGame(v === "hard" ? "hard" : Number(v));
+  };
+  document.getElementById("smaller").onclick = function () { changeSize(-1); };
+  document.getElementById("bigger").onclick = function () { changeSize(1); };
+  document.getElementById("voiceH").onclick = function () { toggleVoice(); this.textContent = voiceOn ? "🔊 소리 켜짐" : "🔇 소리 꺼짐"; };
+  window.scrollTo(0, 0);
+}
+
+function toggleVoice() {
+  voiceOn = !voiceOn; lsSet(K_VOICE, voiceOn ? "1" : "0");
+  if (!voiceOn) stopSpeak();
+}
+
+function startGame(dan, replay) {
+  var items = [], title;
+  if (dan === "hard") {
+    // '한 번 더'일 때는 방금 풀던 문제를 그대로 다시 (한 번에 맞혀서 목록에서 지워졌어도 계속 할 수 있게)
+    items = (replay && replay.length) ? replay.slice() : hardList();
+    if (!items.length) return;
+    title = "복습";
+  } else {
+    for (var b = 1; b <= 9; b++) items.push([dan, b]);
+    title = dan + "단";
+  }
+  G = { dan: dan, title: title, kind: KIND[dan], items: items, i: 0, solved: 0, stage: 0, timer: null, locked: false, lastMsg: -1 };
+  app.innerHTML =
+    '<div class="game">' +
+    '<div class="bar"><button class="barbtn" id="quit">← 그만하기</button><span class="title" id="ttl"><span>' + title + '</span></span>' +
+    '<button class="barbtn" id="voiceG">' + voiceLabel() + '</button></div>' +
+    '<div class="q" id="q"></div>' +
+    '<div class="row1"><div class="slots" id="slots"></div><div class="plant" id="plantbox"></div></div>' +
+    '<div class="choices" id="choices"></div>' +
+    '<div class="msg" id="msg"></div></div>';
+  document.getElementById("quit").onclick = function () { showHome(); };
+  document.getElementById("voiceG").onclick = function () { toggleVoice(); this.textContent = voiceLabel(); };
+  drawPlant(false);
+  showQuestion();
+  fitTitle();
+}
+
+function voiceLabel() { return voiceOn ? "소리 켬" : "소리 끔"; }
+
+// 한 줄 글자가 칸보다 넓으면 글자 크기를 자동으로 살짝 줄여서 밖으로 안 나가게
+function fitLine(el, box) {
+  if (!el || !box) return;
+  el.style.fontSize = "";
+  var avail = box.clientWidth, w = el.getBoundingClientRect().width;
+  if (avail > 0 && w > avail) {
+    var fs = parseFloat(getComputedStyle(el).fontSize);
+    el.style.fontSize = (Math.floor(fs * avail / w * 0.97 * 10) / 10) + "px";
+  }
+}
+function fitTitle() { var t = document.getElementById("ttl"); if (t) fitLine(t.firstChild, t); }
+function fitAll() {
+  var q = document.getElementById("q"), m = document.getElementById("msg");
+  if (q) fitLine(q.firstChild, q);
+  if (m && m.firstChild) fitLine(m.firstChild, m);
+  fitTitle();
+}
+window.addEventListener("resize", fitAll);
+window.addEventListener("orientationchange", fitAll);
+
+function drawPlant(bounce) {
+  var box = document.getElementById("plantbox");
+  if (!box) return;
+  box.innerHTML = plantSVG(G.kind, G.stage, "tall");
+  if (bounce) { var svg = box.firstChild; svg.classList.remove("bounce"); void svg.offsetWidth; svg.classList.add("bounce"); }
+}
+
+function setMsg(text, bad) {
+  var m = document.getElementById("msg");
+  m.className = "msg" + (bad ? " bad" : "");
+  if (!text) { m.innerHTML = ""; return; }
+  m.innerHTML = "<span></span>";
+  m.firstChild.textContent = text;
+  fitLine(m.firstChild, m);
+}
+var PRAISE = ["맞았어요! 👏", "정답이에요!", "잘하셨어요!", "최고예요! 👍", "척척박사님!", "기억나셨군요!"];
+var OOPS = ["어이쿠, 숫자가 장난쳤네요 😄", "괜찮아요, 다시 한 번!", "아깝다~ 다시 해 봐요", "숫자가 숨바꼭질 중이네요"];
+function pickMsg(list) { var i; do { i = Math.floor(Math.random() * list.length); } while (i === G.lastMsg && list.length > 1); G.lastMsg = i; return list[i]; }
+
+function renderSlots() {
+  var h = "";
+  for (var i = 0; i < G.digits.length; i++) {
+    var filled = i < G.pos;
+    h += '<div class="slot' + (filled ? ' filled' : '') + '">' + (filled ? G.digits[i] : '') + '</div>';
+  }
+  document.getElementById("slots").innerHTML = h;
+}
+
+function showQuestion() {
+  var it = G.items[G.i], a = it[0], b = it[1];
+  G.a = a; G.b = b;
+  G.digits = String(a * b).split("").map(Number);
+  G.choices = buildChoices(a, b);
+  G.pos = 0; G.firstTryWrong = false; G.locked = false;
+  var q = document.getElementById("q");
+  q.innerHTML = '<span class="eq"><span>' + a + '</span><span>×</span><span>' + b + '</span><span>=</span><span>?</span></span>';
+  fitLine(q.firstChild, q);
+  renderSlots();
+  var h = "";
+  for (var i = 0; i < 4; i++) h += '<button class="ch" data-i="' + i + '">' + G.choices[i] + '</button>';
+  var box = document.getElementById("choices");
+  box.innerHTML = h;
+  var btns = box.querySelectorAll(".ch");
+  for (var j = 0; j < btns.length; j++) btns[j].onclick = function () { press(this); };
+  setMsg("");
+  speak(askText(a, b), true);
+}
+
+function press(btn) {
+  if (G.locked || btn.disabled) return;
+  var d = G.choices[Number(btn.getAttribute("data-i"))];
+  if (d === G.digits[G.pos]) {
+    btn.className = "ch ok"; btn.disabled = true;
+    G.pos++;
+    var all = document.querySelectorAll("#choices .ch");
+    for (var i = 0; i < all.length; i++) if (all[i].className.indexOf("no") >= 0) { all[i].className = "ch"; all[i].disabled = false; }
+    renderSlots();
+    if (G.pos === G.digits.length) questionDone();
+  } else {
+    btn.className = "ch no"; btn.disabled = true;
+    if (!G.firstTryWrong) { G.firstTryWrong = true; bumpWrong(G.a, G.b, 1); }
+    setMsg(pickMsg(OOPS), true);
+    speak("다시 한 번 해 보세요", false);
+  }
+}
+
+function questionDone() {
+  G.locked = true;
+  if (!G.firstTryWrong) bumpWrong(G.a, G.b, -1);   // 한 번에 맞히면 틀린 횟수가 줄어요
+  G.solved++;
+  G.stage = Math.round(9 * G.solved / G.items.length);
+  drawPlant(true);
+  setMsg(chant(G.a, G.b) + " — " + pickMsg(PRAISE));
+  speak(chant(G.a, G.b), false);
+  G.timer = setTimeout(function () {
+    G.timer = null;
+    if (G.i >= G.items.length - 1) showDone(); else { G.i++; showQuestion(); }
+  }, DELAY);
+}
+
+function showDone() {
+  var key = G.dan, done = jGet(K_DONE, {});
+  done[key] = (done[key] || 0) + 1; jSet(K_DONE, done);
+  var cap = CAPTION[G.kind], dan = G.dan, played = G.items.slice();
+  app.innerHTML =
+    '<div class="done"><h2>' + G.title + ' 다 맞히셨어요!</h2>' +
+    '<div class="big" id="big">' + plantSVG(G.kind, 9) + '</div>' +
+    '<div class="cap">' + cap + '</div>' +
+    '<button class="main-btn" id="again">한 번 더</button>' +
+    '<button class="main-btn second" id="home">처음으로</button></div>';
+  var svg = document.querySelector("#big svg"); if (svg) svg.classList.add("bounce");
+  document.getElementById("again").onclick = function () { startGame(dan, dan === "hard" ? played : null); };
+  document.getElementById("home").onclick = function () { showHome(); };
+  speak(cap.replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, ""), false);
+  G = null;
+}
+
+/* =====================================================
+   앱을 그냥 두고 오래 있다 돌아오면 첫 화면으로
+   ===================================================== */
+function leftScreen() { if (hiddenAt === null) hiddenAt = Date.now(); stopSpeak(); }
+function backOnScreen() {
+  if (hiddenAt !== null) {
+    var away = Date.now() - hiddenAt; hiddenAt = null;
+    if (away >= RESET_AFTER_MINUTES * 60 * 1000) showHome();
+  }
+}
+document.addEventListener("visibilitychange", function () { if (document.hidden) leftScreen(); else backOnScreen(); });
+window.addEventListener("pagehide", leftScreen);
+window.addEventListener("pageshow", backOnScreen);
+
+applySize();
+showHome();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+}
+</script>
+</body>
+</html>
